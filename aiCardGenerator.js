@@ -49,10 +49,11 @@ const cardExamples = {
   }
 };
 
-function buildPrompt({ subject, topic, examType, examBoard, questionType, numCards }) {
+function buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
   const complexityGuidance = examComplexityGuidance[examType] || examComplexityGuidance["GCSE"];
   
   let basePrompt = `Generate ${numCards} high-quality flashcards for ${examBoard} ${examType} ${subject} on "${topic}".
+  You are currently generating card number ${iterationHint + 1} of a total set of ${totalCardsInSet} for this specific topic.
   
 DIFFICULTY LEVEL: ${complexityGuidance}
 
@@ -63,8 +64,9 @@ SPECIFIC INSTRUCTIONS:
 4. Where possible use questions similar to those found in ${examType} exams for ${examBoard}.
 `;
 
-  if (numCards > 1) {
-    basePrompt += `5. If generating multiple cards for this topic, each card's question must be unique and explore a different facet of the topic.\n`;
+  if (totalCardsInSet > 1) {
+    basePrompt += `5. This is card ${iterationHint + 1} of ${totalCardsInSet}. Ensure its question is unique and explores a different facet of the topic compared to other cards in this set (especially if iterationHint > 0).
+`;
   }
 
   if (questionType === "multiple_choice") {
@@ -87,7 +89,7 @@ CONTENT GUIDANCE:
   else if (questionType === "essay") {
     basePrompt += `
 CONTENT GUIDANCE:
-- Ensure essay questions align with the command word guidance provided in the system message.
+- Ensure essay questions align with the command word guidance provided in the system message. For this specific card (${iterationHint + 1} of ${totalCardsInSet}), pay close attention to the instruction to use a *distinct* command verb and question style.
 - Each question generated for this topic must be distinct and explore a different facet.
 - KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion)
 - Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer
@@ -102,7 +104,6 @@ CONTENT GUIDANCE:
 - Explanation: What each letter stands for with detailed explanation of the concept it represents.
 `;
   }
-
   return basePrompt;
 }
 
@@ -213,12 +214,26 @@ function validateCards(cards, params) {
 }
 
 // generateCards function based on improved-flashcard-code.js, with integrated fixes
-async function generateCards({ subject, topic, examType, examBoard, questionType, numCards }) {
-  const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards });
+async function generateCards({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
+  const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint, totalCardsInSet });
+
+  // Dynamically adjust system message based on iteration context for essays
+  let essayInstruction = "";
+  if (questionType === 'essay') {
+    if (totalCardsInSet > 1) {
+      essayInstruction = `You are generating card number ${iterationHint + 1} of ${totalCardsInSet} essay questions for "${topic}". It is CRITICAL that this card uses a *different primary command verb* and explores a *different facet* of the topic than other cards in this set. `;
+      if (iterationHint > 0) {
+        essayInstruction += `Do NOT repeat command verbs or question themes that would have been used for cards 1 to ${iterationHint}. `;
+      }
+      essayInstruction += "Consult the command verb categories provided and select a new one, primarily from Categories 3 or 4. "
+    } else {
+      essayInstruction = "Ensure the essay question uses an appropriate command verb, primarily from Categories 3 or 4. "
+    }
+  }
 
   const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams.
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
-  When generating multiple cards for the same topic, each card's question must be unique and explore a different facet of the topic.
+  ${questionType === 'essay' && totalCardsInSet > 1 ? `When generating multiple cards for the same topic (this is card ${iterationHint + 1} of ${totalCardsInSet}), each card's question MUST be unique and explore a different facet of the topic.` : ''}
   Ensure the output strictly adheres to the requested JSON schema.
 
   Here are categories of command words to guide question formulation:
@@ -230,12 +245,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   Guidance for selecting command words based on question type:
   - For 'multiple_choice' and basic 'short_answer' questions, primarily use command words from Category 1 & 2.
   - For more detailed 'short_answer' questions requiring some analysis, consider Category 3.
-  - For 'essay' questions (especially at ${examType} level):
-    1. Primarily use command words from Category 3 & 4.
-    2. When generating ${numCards} essay questions for "${topic}":
-       a. Aim to select primary command words from *different* relevant categories (mainly 3 & 4) for each question, if appropriate for the topic.
-       b. Do not repeat the same primary command word if multiple essay cards are requested.
-       c. Ensure the chosen command word is suitable for an essay format and the specific question being asked about "${topic}".
+  - For 'essay' questions (especially at ${examType} level): ${essayInstruction}
 
   For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
   For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
@@ -366,14 +376,14 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         return JSON.stringify([]); // Return empty array string
       }
       if (functionArgs.cards && Array.isArray(functionArgs.cards)) {
-        console.log(`Successfully received ${functionArgs.cards.length} cards from OpenAI function call.`);
+        console.log(`Successfully received ${functionArgs.cards.length} cards from OpenAI function call for iteration ${iterationHint}.`);
         
         const validatedCards = validateCards(functionArgs.cards, { subject, topic, examType, examBoard, questionType });
         
         // Log validation issues for internal review if any
         validatedCards.forEach((card, index) => {
           if (card._validationIssues && card._validationIssues.length > 0) {
-            console.warn(`Validation issues for card ${index + 1} ('${card.question && card.question.substring(0,30)}...'):`, card._validationIssues);
+            console.warn(`Validation issues for card ${index + 1} (iter ${iterationHint}, '${card.question && card.question.substring(0,30)}...'):`, card._validationIssues);
           }
         });
         
@@ -382,7 +392,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
           return cleanCard;
         });
 
-        console.log(`Returning ${cleanCards.length} validated and cleaned cards.`);
+        console.log(`Returning ${cleanCards.length} validated and cleaned cards for iteration ${iterationHint}.`);
         return JSON.stringify(cleanCards);
       } else {
         console.error("OpenAI function call returned invalid or missing cards array. Args:", functionArgs);
@@ -395,7 +405,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       try {
         const parsedContent = JSON.parse(content);
         if (parsedContent && parsedContent.cards && Array.isArray(parsedContent.cards)) {
-           console.log(`Successfully parsed ${parsedContent.cards.length} cards from direct content.`);
+           console.log(`Successfully parsed ${parsedContent.cards.length} cards from direct content for iteration ${iterationHint}.`);
            const validatedCards = validateCards(parsedContent.cards, { subject, topic, examType, examBoard, questionType });
            const cleanCards = validatedCards.map(card => {
              const { _validationIssues, ...cleanCard } = card;
@@ -403,7 +413,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
            });
            return JSON.stringify(cleanCards);
         } else if (Array.isArray(parsedContent)) { // If the content itself is an array of cards
-           console.log(`Successfully parsed ${parsedContent.length} cards directly as array from content.`);
+           console.log(`Successfully parsed ${parsedContent.length} cards directly as array from content for iteration ${iterationHint}.`);
            const validatedCards = validateCards(parsedContent, { subject, topic, examType, examBoard, questionType });
            const cleanCards = validatedCards.map(card => {
              const { _validationIssues, ...cleanCard } = card;
@@ -431,7 +441,7 @@ const cache = new Map();
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
 
 async function generateWithRetry(params, maxRetries = 2) { // Reduced default retries
-  const cacheKey = `${params.subject}|${params.topic}|${params.examType}|${params.examBoard}|${params.questionType}|${params.numCards}`;
+  const cacheKey = `${params.subject}|${params.topic}|${params.examType}|${params.examBoard}|${params.questionType}|${params.numCards}|iter${params.iterationHint || 0}|total${params.totalCardsInSet || params.numCards}`;
   if (cache.has(cacheKey)) {
     const cached = cache.get(cacheKey);
     if (Date.now() - cached.timestamp < CACHE_TTL) {
@@ -453,7 +463,7 @@ async function generateWithRetry(params, maxRetries = 2) { // Reduced default re
              timestamp: Date.now(),
              data: resultString 
            });
-           console.log(`Successfully generated and cached ${parsedResult.length} cards for ${cacheKey}`);
+           console.log(`Successfully generated and cached data for ${cacheKey}`);
         } else {
           // This case should ideally not happen if generateCards always returns '[]' on error
           console.warn(`generateCards did not return a valid array string for ${cacheKey}. Result: ${resultString.substring(0,100)}...`);
@@ -497,12 +507,15 @@ async function generateLargeCardSet({ subject, topic, examType, examBoard, quest
     const batches = Math.ceil(numCards / batchSize);
     const promises = [];
     
-    console.log(`Splitting ${numCards} cards into ${batches} batches of ~${batchSize} cards`);
+    console.log(`Splitting ${numCards} cards into ${batches} batches of ~${batchSize} cards for topic "${topic}" (iteration aware).`);
     
     for (let i = 0; i < batches; i++) {
       const cardsInBatch = Math.min(batchSize, numCards - (i * batchSize));
       promises.push(generateWithRetry({ 
-        subject, topic, examType, examBoard, questionType, numCards: cardsInBatch 
+        subject, topic, examType, examBoard, questionType, 
+        numCards: cardsInBatch, 
+        iterationHint: i,      // Pass current iteration index
+        totalCardsInSet: numCards // Pass original total number of cards
       }));
     }
     
@@ -520,7 +533,7 @@ async function generateLargeCardSet({ subject, topic, examType, examBoard, quest
           }
         })
         .flat();
-      console.log(`Combined ${combined.length} cards from ${batches} batches.`);
+      console.log(`Combined ${combined.length} cards from ${batches} batches for "${topic}".`);
       return JSON.stringify(combined);
     } catch (error) {
       console.error("Parallel generation error in Promise.all:", error);
