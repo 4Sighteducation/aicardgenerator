@@ -87,7 +87,8 @@ CONTENT GUIDANCE:
   else if (questionType === "essay") {
     basePrompt += `
 CONTENT GUIDANCE:
-- Questions should reflect a realistic variety of ${examType} essay styles. It is crucial that for essay questions, you do not exclusively use one command word like 'evaluate'. Actively vary the command words (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain') to reflect a realistic range of exam question styles. Each question generated for this topic must be distinct.
+- Ensure essay questions align with the command word guidance provided in the system message.
+- Each question generated for this topic must be distinct and explore a different facet.
 - KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion)
 - Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer
 - DetailedAnswer should provide a more elaborate explanation of the content, suitable for deeper understanding after reviewing key points
@@ -215,11 +216,27 @@ function validateCards(cards, params) {
 async function generateCards({ subject, topic, examType, examBoard, questionType, numCards }) {
   const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards });
 
-  const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams. 
+  const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams.
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
-  Where possible, base questions on previous ${examBoard} exam papers and ensure mark scheme alignment.
+  When generating multiple cards for the same topic, each card's question must be unique and explore a different facet of the topic.
   Ensure the output strictly adheres to the requested JSON schema.
-  For essay questions, it is crucial that you do not exclusively use one command word like 'evaluate'. Actively vary the command words (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain', 'assess') to reflect a realistic range of exam question styles. When generating multiple cards for the same topic, each card's question must be unique and explore a different facet of the topic.
+
+  Here are categories of command words to guide question formulation:
+  Category 1 (Recall & Basic Description): Label, Annotate, List, Define, Describe, Select, State/Relate, Outline, Summarise, Illustrate
+  Category 2 (Explanation & Application): Explain, Comment on, Determine, Demonstrate, Identify/Infer, Calculate, Show/Prove/Set out, Verify/Give reasons for/Consider, Translate, Correct
+  Category 3 (Analysis & Detailed Examination): Analyse, Examine, Explore, Compare and contrast/Differentiate between/Distinguish between, Review, Investigate, Solve
+  Category 4 (Judgement & Justification): Discuss/"To what extent...", Evaluate, Assess, Argue, Justify, Criticise, Suggest/Propose/Make a case for, Predict, Recommend
+
+  Guidance for selecting command words based on question type:
+  - For 'multiple_choice' and basic 'short_answer' questions, primarily use command words from Category 1 & 2.
+  - For more detailed 'short_answer' questions requiring some analysis, consider Category 3.
+  - For 'essay' questions (especially at ${examType} level):
+    1. Primarily use command words from Category 3 & 4.
+    2. When generating ${numCards} essay questions for "${topic}":
+       a. Aim to select primary command words from *different* relevant categories (mainly 3 & 4) for each question, if appropriate for the topic.
+       b. Do not repeat the same primary command word if multiple essay cards are requested.
+       c. Ensure the chosen command word is suitable for an essay format and the specific question being asked about "${topic}".
+
   For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
   For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
   For 'short_answer', 'keyPoints' should be an array of strings.
