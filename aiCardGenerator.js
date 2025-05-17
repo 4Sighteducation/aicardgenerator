@@ -33,19 +33,6 @@ const cardExamples = {
       ],
       detailedAnswer: "When temperature increases, particles gain more kinetic energy, moving faster and colliding more frequently. A greater proportion of these collisions exceed the activation energy required for reaction, resulting in more successful collisions per unit time. This leads to an exponential increase in reaction rate as described by the Arrhenius equation."
     }
-  },
-  essay: {
-    History: {
-      question: "To what extent was the Treaty of Versailles responsible for the outbreak of World War II?",
-      keyPoints: [
-        "Economic impact on Germany",
-        "Military restrictions and rearmament",
-        "Territorial losses and national humiliation",
-        "Rise of extremism and Hitler's exploitation",
-        "Other contributing factors (Great Depression, appeasement policy)"
-      ],
-      detailedAnswer: "Begin by outlining the key provisions of the Treaty of Versailles and their impact on Germany. Analyze how these provisions contributed to economic crisis, national resentment, and political instability. Evaluate how Hitler exploited these grievances. Counter-argue by discussing other significant factors such as the Great Depression and appeasement policy. Conclude with a balanced assessment of the Treaty's significance relative to other factors."
-    }
   }
 };
 
