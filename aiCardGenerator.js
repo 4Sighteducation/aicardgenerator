@@ -223,11 +223,12 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
     if (totalCardsInSet > 1) {
       essayInstruction = `You are generating card number ${iterationHint + 1} of ${totalCardsInSet} essay questions for "${topic}". It is CRITICAL that this card uses a *different primary command verb* and explores a *different facet* of the topic than other cards in this set. `;
       if (iterationHint > 0) {
-        essayInstruction += `Do NOT repeat command verbs or question themes that would have been used for cards 1 to ${iterationHint}. `;
+        essayInstruction += `Do NOT repeat primary command verbs that would have been used for cards 1 to ${iterationHint}. `;
       }
-      essayInstruction += "Consult the command verb categories provided and select a new one, primarily from Categories 3 or 4. "
-    } else {
-      essayInstruction = "Ensure the essay question uses an appropriate command verb, primarily from Categories 3 or 4. "
+      essayInstruction += "Consult the command verb categories provided. For this card, select a new primary command verb, primarily from Categories 3 or 4. ";
+      essayInstruction += `If 'evaluate' (or a close variant like 'critically evaluate') was used as the primary command verb for any other card in this set of ${totalCardsInSet} cards, you *must not* use 'evaluate' or 'critically evaluate' as the primary command verb for this card (${iterationHint + 1}). Aim for true diversity in command actions.`;
+    } else { // Only one essay card requested
+      essayInstruction = "Ensure the essay question uses an appropriate command verb, primarily from Categories 3 or 4 (e.g., discuss, analyse, assess, to what extent, rather than solely evaluate). ";
     }
   }
 
