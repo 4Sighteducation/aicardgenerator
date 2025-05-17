@@ -469,8 +469,12 @@ async function generateWithRetry(params, maxRetries = 2) { // Reduced default re
 
 // Parallel processing (retained and adapted)
 async function generateLargeCardSet({ subject, topic, examType, examBoard, questionType, numCards }) {
-  if (numCards > 5) { 
-    const batchSize = 3; 
+  const isSlowPath = (questionType === "essay" || examType === "A-Level" || examType === "IB");
+  const batchThreshold = isSlowPath ? 1 : 2; // More aggressive batching: 1-by-1 for slow, else if > 2 cards
+  const effectiveBatchSize = isSlowPath ? 1 : 2; // Generate 1 card at a time for slow path, 2 for others in batch
+
+  if (numCards > batchThreshold) { 
+    const batchSize = effectiveBatchSize;
     const batches = Math.ceil(numCards / batchSize);
     const promises = [];
     
