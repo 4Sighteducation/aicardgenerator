@@ -104,81 +104,203 @@ CONTENT GUIDANCE:
   return basePrompt;
 }
 
+// Card validation function from improved-flashcard-code.js
+function validateCards(cards, params) {
+  const { questionType, examType, topic, examBoard } = params;
+  
+  return cards.map(card => {
+    let issues = [];
+    if (!card.question || typeof card.question !== 'string' || card.question.trim() === '') {
+        issues.push("Question is missing or empty.");
+        card.question = "Question generation failed."; // Default placeholder
+    } else if (card.question.length < 10 && !card.question.toLowerCase().includes(topic.toLowerCase())) { // Adjusted length
+      issues.push("Question too brief or may lack specificity to the topic.");
+    }
+
+    // Ensure subject, topic, questionType are present, defaulting if necessary (though API should provide)
+    card.subject = card.subject || params.subject;
+    card.topic = card.topic || params.topic;
+    card.questionType = card.questionType || params.questionType;
+
+
+    if (questionType === "multiple_choice") {
+      if (!card.options || !Array.isArray(card.options) || card.options.length !== 4) {
+        issues.push("Multiple choice requires exactly 4 options.");
+        card.options = ["Option A", "Option B", "Option C", "Option D"]; // Placeholder
+      }
+      if (!card.correctAnswer || typeof card.correctAnswer !== 'string' || !card.options.includes(card.correctAnswer)) {
+        issues.push("Correct answer must match exactly one of the options.");
+        card.correctAnswer = card.options[0]; // Default to first option if invalid
+      }
+      if (new Set(card.options).size !== card.options.length) {
+        issues.push("Multiple choice options must be unique.");
+        // Basic de-duplication attempt (simple case)
+        card.options = [...new Set(card.options)]; 
+        while(card.options.length < 4) card.options.push(`Unique Option ${card.options.length + 1}`);
+        if (!card.options.includes(card.correctAnswer)) card.correctAnswer = card.options[0];
+
+      }
+       if (!card.detailedAnswer || card.detailedAnswer.length < 20) {
+         issues.push("Multiple choice detailed answer lacks sufficient explanation.");
+         card.detailedAnswer = card.detailedAnswer || "Detailed explanation should be provided here.";
+       }
+    } else if (questionType === "short_answer") {
+      if (!card.keyPoints || !Array.isArray(card.keyPoints) || card.keyPoints.length < 1 || card.keyPoints.length > 5) {
+        issues.push("Short answer requires 1-5 key points.");
+        card.keyPoints = card.keyPoints || ["Key point 1"];
+      }
+      if (!card.detailedAnswer || card.detailedAnswer.length < 30) {
+        issues.push("Short answer detailed explanation lacks depth.");
+        card.detailedAnswer = card.detailedAnswer || "More detailed explanation needed.";
+      }
+    } else if (questionType === "essay") {
+      if (!card.keyPoints || !Array.isArray(card.keyPoints) || card.keyPoints.length < 2) {
+        issues.push("Essay requires at least 2 key points for structure.");
+        card.keyPoints = card.keyPoints || ["Introduction point", "Main argument point"];
+      }
+      if (!card.detailedAnswer || card.detailedAnswer.length < 50) {
+        issues.push("Essay detailed explanation lacks depth.");
+        card.detailedAnswer = card.detailedAnswer || "More detailed explanation and analysis needed.";
+      }
+    } else if (questionType === "acronym") {
+      if (!card.acronym || typeof card.acronym !== 'string' || card.acronym.trim() === '') {
+          issues.push("Acronym field is missing or empty.");
+          card.acronym = card.acronym || "ACRNYM";
+      }
+      if (!card.explanation || card.explanation.length < 20) {
+        issues.push("Acronym explanation lacks sufficient detail.");
+        card.explanation = card.explanation || "Detailed explanation of the acronym and its components.";
+      }
+    }
+
+    if (examType === "A-Level" || examType === "IB") {
+      if (card.detailedAnswer && card.detailedAnswer.length < (questionType === "essay" ? 150 : 100)) { // Increased minimum for essay
+        issues.push(`${examType} explanation may lack sufficient depth/analysis.`);
+      }
+      const evaluationTerms = ["evaluate", "analyze", "compare", "contrast", "assess", "critique", "to what extent", "discuss"];
+      if (questionType === "essay" && !evaluationTerms.some(term => 
+        (card.question && card.question.toLowerCase().includes(term)) || 
+        (card.keyPoints && card.keyPoints.some(point => point.toLowerCase().includes(term))))) {
+        issues.push(`${examType} essay question or key points may lack evaluation/analytical focus.`);
+      }
+    } else if (examType === "GCSE") {
+      if (card.detailedAnswer && card.detailedAnswer.length > 400) { // Slightly increased max
+        issues.push("GCSE explanation may be overly complex for the level.");
+      }
+    }
+    
+    // Map acronym explanation to detailedAnswer for frontend consistency
+    if (card.questionType === "acronym" && card.explanation && !card.detailedAnswer) {
+      card.detailedAnswer = card.explanation;
+    }
+    
+    // Ensure all card types have a detailedAnswer field, even if basic
+    if (!card.detailedAnswer) {
+        if (card.explanation) { // primarily for acronyms if not already mapped
+            card.detailedAnswer = card.explanation;
+        } else if (card.keyPoints && Array.isArray(card.keyPoints)) { // for short_answer/essay if detailedAnswer somehow missing
+            card.detailedAnswer = card.keyPoints.join("\n");
+        } else {
+            card.detailedAnswer = "No detailed answer provided."; // ultimate fallback
+        }
+    }
+
+
+    return { ...card, _validationIssues: issues };
+  });
+}
+
+// generateCards function based on improved-flashcard-code.js, with integrated fixes
 async function generateCards({ subject, topic, examType, examBoard, questionType, numCards }) {
-  // Build an optimized prompt
   const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards });
 
-  // Use a more focused system message
-  const systemMessage = `You are an expert ${examType} ${subject} educator. Create precise, high-quality flashcards that match ${examBoard} standards for ${examType} students studying ${topic}.`;
+  const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams. 
+  Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
+  Where possible, base questions on previous ${examBoard} exam papers and ensure mark scheme alignment.
+  Ensure the output strictly adheres to the requested JSON schema.
+  For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
+  For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
+  For 'short_answer', 'keyPoints' should be an array of strings.
+  For 'essay', 'keyPoints' should be an array of strings outlining structure.
+  All card types must include a 'question'. All card types should result in a 'detailedAnswer' field being populated, for acronyms this will come from the 'explanation'.`;
 
-  // Choose model based on complexity - use faster model for simpler card types
-  const model = questionType === "essay" ? "gpt-4-turbo" : "gpt-3.5-turbo";
+  const model = (questionType === "essay" || examType === "A-Level" || examType === "IB") 
+    ? "gpt-4-turbo" 
+    : "gpt-3.5-turbo";
 
-  // Define function parameters based on question type
   let cardProperties = {
-    subject: { type: "string" },
-    topic: { type: "string" },
-    questionType: { type: "string" }
+    subject: { type: "string", description: `The subject: ${subject}` },
+    topic: { type: "string", description: `The specific topic: ${topic}` },
+    questionType: { type: "string", description: `The type of card: ${questionType}` },
+    syllabusReference: { 
+      type: "string", 
+      description: `Optional: The specific section of the ${examBoard} ${examType} syllabus this question relates to (e.g., "3.4.2 Cellular Respiration"). Leave empty if not directly applicable.`
+    },
+    question: { type: "string", description: "The primary question for the flashcard front." }
   };
   
-  // Add question-type specific properties to the schema
   if (questionType === "multiple_choice") {
     cardProperties = {
       ...cardProperties,
-      question: { type: "string", description: "The multiple-choice question related to the topic" },
       options: { 
         type: "array", 
         items: { type: "string" },
-        description: "Four distinct answer options for the question"
+        description: "Exactly four distinct answer options for the question. All options should be plausible."
       },
       correctAnswer: { 
         type: "string", 
-        description: "The correct answer, must match exactly one of the options"
+        description: "The correct answer, must match exactly one of the provided options."
       },
       detailedAnswer: { 
         type: "string", 
-        description: "Thorough explanation with curriculum-specific terminology"
+        description: `Thorough explanation of why the correct answer is right and others are wrong, using ${examType}-appropriate terminology that would satisfy ${examBoard} mark scheme requirements.`
       }
     };
   } else if (questionType === "short_answer") {
     cardProperties = {
       ...cardProperties,
-      question: { type: "string", description: "Specific question requiring a short answer" },
       keyPoints: { 
         type: "array", 
         items: { type: "string" },
-        description: "2-4 key points that would earn full marks in an exam"
+        description: "2-5 key points that would earn marks in an exam. These are concise bullet points."
       },
       detailedAnswer: { 
         type: "string", 
-        description: "Comprehensive explanation with examples, separate from key points."
+        description: `A comprehensive explanation expanding on the key points, providing context and examples. This is more narrative than the key points.`
       }
     };
   } else if (questionType === "essay") {
     cardProperties = {
       ...cardProperties,
-      question: { type: "string", description: "Discussion/analysis essay question" },
       keyPoints: { 
         type: "array", 
         items: { type: "string" },
-        description: "Key points outlining essay structure and main arguments (e.g., intro, arguments, conclusion)."
+        description: "3-6 key points outlining the essay structure and main arguments (e.g., introduction, main body paragraph arguments, conclusion points). These guide the essay plan."
       },
       detailedAnswer: { 
         type: "string", 
-        description: "Detailed explanation of essay content, suitable for the info modal."
+        description: `A detailed explanation of the essay's content, covering the core arguments, evidence, and analysis expected. This is the 'model answer' content.`
       }
     };
   } else if (questionType === "acronym") {
     cardProperties = {
       ...cardProperties,
-      question: { type: "string", description: "The question to be displayed on the front of the card, e.g., 'What does HTML stand for?'" },
-      acronym: { type: "string", description: "A memorable acronym for a concept" },
+      acronym: { type: "string", description: "The acronym itself (e.g., 'LASER')." },
       explanation: { 
         type: "string", 
-        description: "What each letter stands for and detailed explanation of the concept it represents (this will be used as the detailed answer)"
+        description: "What each letter in the acronym stands for, followed by a detailed explanation of the concept the acronym represents. This will be used as the detailed answer for the card."
       }
+      // detailedAnswer will be populated from explanation post-generation for this type
     };
   }
+  // Ensure all required properties are indeed required by the schema for the AI
+  const baseRequired = ["subject", "topic", "questionType", "question"];
+  let currentRequired = [...baseRequired];
+  if (questionType === "multiple_choice") currentRequired.push("options", "correctAnswer", "detailedAnswer");
+  else if (questionType === "short_answer") currentRequired.push("keyPoints", "detailedAnswer");
+  else if (questionType === "essay") currentRequired.push("keyPoints", "detailedAnswer");
+  else if (questionType === "acronym") currentRequired.push("acronym", "explanation");
+
 
   try {
     const response = await openai.chat.completions.create({
@@ -189,7 +311,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       ],
       functions: [{
         name: "generateFlashcards",
-        description: `Generate ${numCards} flashcards for ${examType} ${subject} on the topic of ${topic}`,
+        description: `Generate ${numCards} authentic ${examBoard} ${examType} flashcards for ${subject} on the topic of ${topic}. Each card must conform to the specified properties.`,
         parameters: {
           type: "object",
           properties: {
@@ -198,7 +320,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
               items: {
                 type: "object",
                 properties: cardProperties,
-                required: Object.keys(cardProperties) // Make all defined properties required
+                required: currentRequired
               }
             }
           },
@@ -206,102 +328,149 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         }
       }],
       function_call: { name: "generateFlashcards" },
-      // Keep max tokens and temperature settings
-      max_tokens: Math.min(3000, numCards * 250), // Slightly increased for function calling
-      temperature: 0.5,
+      max_tokens: Math.min(4000, numCards * 350 + 200), // Adjusted token allocation
+      temperature: 0.45, // Slightly adjusted temperature
     });
     
-    // Extract the function call result
     if (response.choices[0].message.function_call) {
+      let functionArgs;
       try {
-        const functionArgs = JSON.parse(response.choices[0].message.function_call.arguments);
-        if (functionArgs.error) {
-          console.error("OpenAI function call returned an error:", functionArgs.error);
-          return JSON.stringify({ error: "OpenAI function call failed: " + (typeof functionArgs.error === 'string' ? functionArgs.error : JSON.stringify(functionArgs.error)) });
-        }
-        if (functionArgs.cards && Array.isArray(functionArgs.cards)) {
-          console.log(`Successfully generated ${functionArgs.cards.length} cards using function calling`);
-          return JSON.stringify(functionArgs.cards);
-        } else {
-          console.error("Function call returned invalid or missing cards array");
-          return JSON.stringify({ error: "Invalid response format from function call" });
-        }
+        functionArgs = JSON.parse(response.choices[0].message.function_call.arguments);
       } catch (parseError) {
-        console.error("Error parsing function call arguments:", parseError);
-        return JSON.stringify({ error: "Failed to parse function response" });
+        console.error("Error parsing function call arguments from OpenAI:", parseError);
+        console.error("Arguments received:", response.choices[0].message.function_call.arguments);
+        return JSON.stringify([]); // Return empty array string on parsing failure
+      }
+
+      if (functionArgs.error) {
+        console.error("OpenAI function call returned an error:", functionArgs.error);
+        return JSON.stringify([]); // Return empty array string
+      }
+      if (functionArgs.cards && Array.isArray(functionArgs.cards)) {
+        console.log(`Successfully received ${functionArgs.cards.length} cards from OpenAI function call.`);
+        
+        const validatedCards = validateCards(functionArgs.cards, { subject, topic, examType, examBoard, questionType });
+        
+        // Log validation issues for internal review if any
+        validatedCards.forEach((card, index) => {
+          if (card._validationIssues && card._validationIssues.length > 0) {
+            console.warn(`Validation issues for card ${index + 1} ('${card.question && card.question.substring(0,30)}...'):`, card._validationIssues);
+          }
+        });
+        
+        const cleanCards = validatedCards.map(card => {
+          const { _validationIssues, ...cleanCard } = card; // Remove validation issues from final output
+          return cleanCard;
+        });
+
+        console.log(`Returning ${cleanCards.length} validated and cleaned cards.`);
+        return JSON.stringify(cleanCards);
+      } else {
+        console.error("OpenAI function call returned invalid or missing cards array. Args:", functionArgs);
+        return JSON.stringify([]); // Return empty array string
       }
     } else {
-      // Fallback to standard response parsing if function calling somehow fails
-      console.warn("Function call not used in response, falling back to content parsing");
+      console.warn("Function call not used in OpenAI response. Fallback not implemented robustly. Response:", response.choices[0].message);
+      // Attempt to parse content directly if no function call - less reliable
       const content = response.choices[0].message.content;
-      
       try {
-        const parsed = JSON.parse(content);
-        if (!Array.isArray(parsed) && parsed.cards && Array.isArray(parsed.cards)) {
-          return JSON.stringify(parsed.cards);
+        const parsedContent = JSON.parse(content);
+        if (parsedContent && parsedContent.cards && Array.isArray(parsedContent.cards)) {
+           console.log(`Successfully parsed ${parsedContent.cards.length} cards from direct content.`);
+           const validatedCards = validateCards(parsedContent.cards, { subject, topic, examType, examBoard, questionType });
+           const cleanCards = validatedCards.map(card => {
+             const { _validationIssues, ...cleanCard } = card;
+             return cleanCard;
+           });
+           return JSON.stringify(cleanCards);
+        } else if (Array.isArray(parsedContent)) { // If the content itself is an array of cards
+           console.log(`Successfully parsed ${parsedContent.length} cards directly as array from content.`);
+           const validatedCards = validateCards(parsedContent, { subject, topic, examType, examBoard, questionType });
+           const cleanCards = validatedCards.map(card => {
+             const { _validationIssues, ...cleanCard } = card;
+             return cleanCard;
+           });
+           return JSON.stringify(cleanCards);
         }
-        return content;
+        console.error("Fallback content parsing failed to find a 'cards' array or a direct array. Content:", content);
+        return JSON.stringify([]);
       } catch (e) {
-        console.error("Failed to parse JSON response:", e);
-        return JSON.stringify({ error: "Failed to generate valid flashcards" });
+        console.error("Error parsing fallback content from OpenAI:", e);
+        console.error("Content received:", content);
+        return JSON.stringify([]); // Return empty array string on parsing failure
       }
     }
   } catch (error) {
-    console.error("OpenAI API error:", error);
-    throw error; // Throw error for retry mechanism to catch
+    console.error("OpenAI API call error:", error.status, error.message, error.response?.data);
+    // Do not throw error, return empty array string for frontend
+    return JSON.stringify([]);
   }
 }
 
-// Optional: Add caching for similar requests to improve performance
+// Caching logic (retained and adapted)
 const cache = new Map();
 const CACHE_TTL = 3600000; // 1 hour in milliseconds
 
-async function generateWithRetry(params, maxRetries = 3) {
-  // Check cache first
+async function generateWithRetry(params, maxRetries = 2) { // Reduced default retries
   const cacheKey = `${params.subject}|${params.topic}|${params.examType}|${params.examBoard}|${params.questionType}|${params.numCards}`;
   if (cache.has(cacheKey)) {
     const cached = cache.get(cacheKey);
     if (Date.now() - cached.timestamp < CACHE_TTL) {
       console.log(`Cache hit for ${cacheKey}`);
-      return cached.data;
+      return cached.data; // This should be a string (JSON array or empty array string)
     }
   }
 
-  // If not in cache, try with retries
   let retries = 0;
   while (retries < maxRetries) {
     try {
-      const result = await generateCards(params);
+      const resultString = await generateCards(params); // Expects a string (JSON array or empty array string)
       
-      // Store in cache
-      cache.set(cacheKey, {
-        timestamp: Date.now(),
-        data: result
-      });
+      // Validate if the result is a parsable array before caching good data
+      try {
+        const parsedResult = JSON.parse(resultString);
+        if(Array.isArray(parsedResult)) {
+           cache.set(cacheKey, {
+             timestamp: Date.now(),
+             data: resultString 
+           });
+           console.log(`Successfully generated and cached ${parsedResult.length} cards for ${cacheKey}`);
+        } else {
+          // This case should ideally not happen if generateCards always returns '[]' on error
+          console.warn(`generateCards did not return a valid array string for ${cacheKey}. Result: ${resultString.substring(0,100)}...`);
+        }
+      } catch (e) {
+         console.error(`Failed to parse result from generateCards for caching ${cacheKey}: ${e}. Result: ${resultString.substring(0,100)}...`);
+         // Don't cache bad data, but still return it as it's what generateCards provided
+      }
+      return resultString;
+
+    } catch (error) { // This catch block in generateWithRetry might not be hit if generateCards handles its own errors
+      console.log(`API call failed (attempt ${retries+1}/${maxRetries}) in generateWithRetry:`, error.status || error.message);
       
-      return result;
-    } catch (error) {
-      console.log(`API call failed (attempt ${retries+1}/${maxRetries}):`, error.status || error.message);
-      
-      if (error.status === 429 || error.message?.includes('rate limit')) {
+      if (error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('quota')) {
         retries++;
-        // Exponential backoff: 1s, 2s, 4s, etc.
-        const delay = Math.pow(2, retries) * 1000;
+        if (retries >= maxRetries) {
+          console.error(`Max retries reached for ${cacheKey} due to rate limits/quota.`);
+          return JSON.stringify([]); // Return empty array string after max retries
+        }
+        const delay = Math.pow(2, retries) * 1000 * (Math.random() * 0.5 + 0.75); // Add jitter
         console.log(`Retrying in ${delay/1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        throw error; // Re-throw other errors
+        console.error(`Unhandled error in generateWithRetry for ${cacheKey}:`, error);
+        return JSON.stringify([]); // Return empty array string for other unhandled errors
       }
     }
   }
-  return JSON.stringify({ error: "Rate limit exceeded after multiple retries" });
+  console.error(`generateWithRetry exhausted retries for ${cacheKey}.`);
+  return JSON.stringify([]); // Fallback after loop if all retries failed
 }
 
-// Parallel processing for large card sets
+// Parallel processing (retained and adapted)
 async function generateLargeCardSet({ subject, topic, examType, examBoard, questionType, numCards }) {
-  // For large card sets, split into smaller batches
-  if (numCards > 5) { // Lower threshold to 5 for better parallelization
-    const batchSize = 3; // Smaller batch size for faster individual responses
+  if (numCards > 5) { 
+    const batchSize = 3; 
     const batches = Math.ceil(numCards / batchSize);
     const promises = [];
     
@@ -315,31 +484,32 @@ async function generateLargeCardSet({ subject, topic, examType, examBoard, quest
     }
     
     try {
-      const results = await Promise.all(promises);
-      // Combine results and return
-      const combined = results
-        .map(r => {
+      const resultsAsStrings = await Promise.all(promises);
+      const combined = resultsAsStrings
+        .map(jsonString => {
           try {
-            return JSON.parse(r);
+            const parsedArray = JSON.parse(jsonString);
+            return Array.isArray(parsedArray) ? parsedArray : []; // Ensure it's an array
           } catch (e) {
-            console.error("Error parsing batch result:", e);
-            return [];
+            console.error("Error parsing batch result string:", e);
+            console.error("String was:", jsonString.substring(0,100)+"...");
+            return []; // Return empty array for unparsable batch
           }
         })
         .flat();
+      console.log(`Combined ${combined.length} cards from ${batches} batches.`);
       return JSON.stringify(combined);
     } catch (error) {
-      console.error("Parallel generation error:", error);
-      return JSON.stringify({ error: "Failed during parallel generation" });
+      console.error("Parallel generation error in Promise.all:", error);
+      return JSON.stringify([]); // Return empty array string on error
     }
   }
   
-  // For smaller sets, use retry approach
   return generateWithRetry({ subject, topic, examType, examBoard, questionType, numCards });
 }
 
 module.exports = { 
-  generateCards, 
+  // generateCards, // Exposing only the higher-level functions
   generateWithRetry, 
   generateLargeCardSet
 };
