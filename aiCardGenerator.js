@@ -221,14 +221,22 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   let essayInstruction = "";
   if (questionType === 'essay') {
     if (totalCardsInSet > 1) {
-      essayInstruction = `You are generating card number ${iterationHint + 1} of ${totalCardsInSet} essay questions for "${topic}". It is CRITICAL that this card uses a *different primary command verb* and explores a *different facet* of the topic than other cards in this set. `;
-      if (iterationHint > 0) {
-        essayInstruction += `Do NOT repeat primary command verbs that would have been used for cards 1 to ${iterationHint}. `;
-      }
-      essayInstruction += "Consult the command verb categories provided. For this card, select a new primary command verb, primarily from Categories 3 or 4. ";
-      essayInstruction += `If 'evaluate' (or a close variant like 'critically evaluate') was used as the primary command verb for any other card in this set of ${totalCardsInSet} cards, you *must not* use 'evaluate' or 'critically evaluate' as the primary command verb for this card (${iterationHint + 1}). Aim for true diversity in command actions.`;
+      essayInstruction = `You are generating card number ${iterationHint + 1} of ${totalCardsInSet} essay questions for "${topic}".
+      INTERNAL THOUGHT PROCESS FOR THIS CARD (${iterationHint + 1}):
+      1. First, consider the topic "${topic}" and your knowledge of ${examBoard} ${examType} ${subject}.
+      2. Review Categories 3 & 4 of command verbs.
+      3. Identify a primary command verb that has NOT been used for previous cards in this set (if ${iterationHint} > 0) and that allows for a unique question angle.
+      4. Briefly consider 2-3 *distinct* question ideas for "${topic}" using *different* appropriate command verbs from Categories 3 & 4.
+      5. For this specific card (${iterationHint + 1}), select the best of these ideas that ensures maximum differentiation from other cards in this set.
+
+      CARD GENERATION INSTRUCTIONS FOR THIS CARD (${iterationHint + 1}):
+      - Based on your internal selection above, formulate a unique essay question using the chosen distinct primary command verb.
+      - Ensure this question explores a different facet of the topic than other cards in this set.
+      - Do NOT repeat primary command verbs that would have been used for cards 1 to ${iterationHint} for this topic.
+      - Aim for a balanced use of different command verbs from Categories 3 & 4 across the ${totalCardsInSet} cards.
+      - While 'evaluate' is a valid command verb, avoid its over-reliance; it should be one of several diverse verbs used in a set of multiple cards.`;
     } else { // Only one essay card requested
-      essayInstruction = "Ensure the essay question uses an appropriate command verb, primarily from Categories 3 or 4 (e.g., discuss, analyse, assess, to what extent, rather than solely evaluate). ";
+      essayInstruction = `For this essay question, first consider the topic "${topic}" and identify a few suitable primary command verbs from Categories 3 or 4. Then, choose the one that best fits the nuance of the question you will formulate (e.g., discuss, analyse, assess, to what extent, evaluate).`;
     }
   }
 
