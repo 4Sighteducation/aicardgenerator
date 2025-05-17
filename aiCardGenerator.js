@@ -49,6 +49,38 @@ const cardExamples = {
   }
 };
 
+// New function from improved-flashcard-code (1).js
+function getEssayInstructions({ topic, examBoard, examType, subject, iterationHint = 0, totalCardsInSet = 1 }) {
+  const category3Verbs = ["Analyse", "Examine", "Explore", "Compare and contrast", "Differentiate between", "Distinguish between", "Review", "Investigate", "Solve"];
+  const category4Verbs = ["Discuss", "To what extent", "Evaluate", "Assess", "Argue", "Justify", "Criticise", "Suggest", "Propose", "Make a case for", "Predict", "Recommend"];
+  
+  if (totalCardsInSet === 1) {
+    return `For this essay question, select a command verb from Category 3 or 4 that best fits the nuance of the question you will formulate about "${topic}".`;
+  }
+  
+  if (iterationHint === 0) {
+    return `This is the first of ${totalCardsInSet} essay questions you'll generate for "${topic}".
+    GUIDANCE FOR THIS CARD:
+    1. Select a command verb from Category 3 or 4 that best suits the topic "${topic}" for ${examBoard} ${examType} ${subject}.
+    2. Remember that you'll need to use different command verbs for the remaining cards in this set.
+    3. Choose the verb that allows you to create the most fundamental or broadest question about this topic.`;
+  } 
+  else if (iterationHint === totalCardsInSet - 1) {
+    return `This is the final (${iterationHint + 1} of ${totalCardsInSet}) essay question for "${topic}".
+    GUIDANCE FOR THIS CARD:
+    1. For this card, select a command verb from Category 3 or 4 that you have NOT used in previous cards.
+    2. If you've already used "Discuss" and "Analyse" in previous cards, consider using "Evaluate", "Assess", "To what extent", or another distinct verb from Categories 3 or 4.
+    3. Ensure this question explores a different facet of "${topic}" compared to previous cards.`;
+  }
+  else {
+    return `This is card ${iterationHint + 1} of ${totalCardsInSet} for "${topic}".
+    GUIDANCE FOR THIS CARD:
+    1. For this card, select a command verb from Category 3 or 4 that you have NOT used in previous cards.
+    2. Ensure this question explores a different facet of "${topic}" compared to previous cards.
+    3. Remember to save some distinct command verbs for remaining cards in the set.`;
+  }
+}
+
 function buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
   const complexityGuidance = examComplexityGuidance[examType] || examComplexityGuidance["GCSE"];
   
@@ -89,11 +121,11 @@ CONTENT GUIDANCE:
   else if (questionType === "essay") {
     basePrompt += `
 CONTENT GUIDANCE:
-- Ensure essay questions align with the command word guidance provided in the system message. For this specific card (${iterationHint + 1} of ${totalCardsInSet}), pay close attention to the instruction to use a *distinct* command verb and question style.
-- Each question generated for this topic must be distinct and explore a different facet.
-- KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion)
-- Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer
-- DetailedAnswer should provide a more elaborate explanation of the content, suitable for deeper understanding after reviewing key points
+- ${getEssayInstructions({ topic, examBoard, examType, subject, iterationHint, totalCardsInSet })}
+- Each question must be distinct and explore a different facet of the topic.
+- KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion).
+- Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer.
+- DetailedAnswer should provide a comprehensive explanation of how to structure the essay and cover key content points.
 `;
   } 
   else if (questionType === "acronym") {
@@ -217,33 +249,9 @@ function validateCards(cards, params) {
 async function generateCards({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
   const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint, totalCardsInSet });
 
-  // Dynamically adjust system message based on iteration context for essays
-  let essayInstruction = "";
-  if (questionType === 'essay') {
-    if (totalCardsInSet > 1) {
-      essayInstruction = `You are generating card number ${iterationHint + 1} of ${totalCardsInSet} essay questions for "${topic}".
-      INTERNAL THOUGHT PROCESS FOR THIS CARD (${iterationHint + 1}):
-      1. First, consider the topic "${topic}" and your knowledge of ${examBoard} ${examType} ${subject}.
-      2. Review Categories 3 & 4 of command verbs.
-      3. Identify a primary command verb that has NOT been used for previous cards in this set (if ${iterationHint} > 0) and that allows for a unique question angle.
-      4. Briefly consider 2-3 *distinct* question ideas for "${topic}" using *different* appropriate command verbs from Categories 3 & 4.
-      5. For this specific card (${iterationHint + 1}), select the best of these ideas that ensures maximum differentiation from other cards in this set.
-
-      CARD GENERATION INSTRUCTIONS FOR THIS CARD (${iterationHint + 1}):
-      - Based on your internal selection above, formulate a unique essay question using the chosen distinct primary command verb.
-      - Ensure this question explores a different facet of the topic than other cards in this set.
-      - Do NOT repeat primary command verbs that would have been used for cards 1 to ${iterationHint} for this topic.
-      - Aim for a balanced use of different command verbs from Categories 3 & 4 across the ${totalCardsInSet} cards.
-      - While 'evaluate' is a valid command verb, avoid its over-reliance; it should be one of several diverse verbs used in a set of multiple cards.`;
-    } else { // Only one essay card requested
-      essayInstruction = `For this essay question, first consider the topic "${topic}" and identify a few suitable primary command verbs from Categories 3 or 4. Then, choose the one that best fits the nuance of the question you will formulate (e.g., discuss, analyse, assess, to what extent, evaluate).`;
-    }
-  }
-
+  // New simplified systemMessage from improved-flashcard-code (1).js
   const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams.
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
-  ${questionType === 'essay' && totalCardsInSet > 1 ? `When generating multiple cards for the same topic (this is card ${iterationHint + 1} of ${totalCardsInSet}), each card's question MUST be unique and explore a different facet of the topic.` : ''}
-  Ensure the output strictly adheres to the requested JSON schema.
 
   Here are categories of command words to guide question formulation:
   Category 1 (Recall & Basic Description): Label, Annotate, List, Define, Describe, Select, State/Relate, Outline, Summarise, Illustrate
@@ -251,16 +259,12 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   Category 3 (Analysis & Detailed Examination): Analyse, Examine, Explore, Compare and contrast/Differentiate between/Distinguish between, Review, Investigate, Solve
   Category 4 (Judgement & Justification): Discuss/"To what extent...", Evaluate, Assess, Argue, Justify, Criticise, Suggest/Propose/Make a case for, Predict, Recommend
 
-  Guidance for selecting command words based on question type:
-  - For 'multiple_choice' and basic 'short_answer' questions, primarily use command words from Category 1 & 2.
-  - For more detailed 'short_answer' questions requiring some analysis, consider Category 3.
-  - For 'essay' questions (especially at ${examType} level): ${essayInstruction}
+  IMPORTANT: For essay questions, use a balanced variety of command verbs from Categories 3 & 4. Don't favor or avoid any particular command verb - choose what best fits the specific question being created.
 
-  For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
-  For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
-  For 'short_answer', 'keyPoints' should be an array of strings.
-  For 'essay', 'keyPoints' should be an array of strings outlining structure.
-  All card types must include a 'question'. All card types should result in a 'detailedAnswer' field being populated, for acronyms this will come from the 'explanation'.`;
+  When generating multiple cards for the same topic, each card's question MUST:
+  1. Use a DIFFERENT primary command verb from the others in the set
+  2. Explore a DIFFERENT facet of the topic
+  3. Be structured uniquely based on the command verb used`;
 
   const model = (questionType === "essay" || examType === "A-Level" || examType === "IB") 
     ? "gpt-4-turbo" 
@@ -328,7 +332,6 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         type: "string", 
         description: "What each letter in the acronym stands for, followed by a detailed explanation of the concept the acronym represents. This will be used as the detailed answer for the card."
       }
-      // detailedAnswer will be populated from explanation post-generation for this type
     };
   }
   // Ensure all required properties are indeed required by the schema for the AI
@@ -367,7 +370,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       }],
       function_call: { name: "generateFlashcards" },
       max_tokens: Math.min(4000, numCards * 350 + 200), // Adjusted token allocation
-      temperature: 0.45, // Slightly adjusted temperature
+      temperature: 0.5, // Slightly increased temperature for more variety
     });
     
     if (response.choices[0].message.function_call) {
