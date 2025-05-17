@@ -50,10 +50,8 @@ const cardExamples = {
 };
 
 function buildPrompt({ subject, topic, examType, examBoard, questionType, numCards }) {
-  // Get complexity guidance for the exam type
   const complexityGuidance = examComplexityGuidance[examType] || examComplexityGuidance["GCSE"];
   
-  // Create a more efficient base prompt focused on content rather than format
   let basePrompt = `Generate ${numCards} high-quality flashcards for ${examBoard} ${examType} ${subject} on "${topic}".
   
 DIFFICULTY LEVEL: ${complexityGuidance}
@@ -62,10 +60,13 @@ SPECIFIC INSTRUCTIONS:
 1. Each flashcard must be directly relevant to "${topic}" specifically.
 2. Include exam-specific terminology and concepts.
 3. Ensure content is appropriate for ${examType} level students.
-4. Where possible use questions similar to those found in ${examType} exams for ${examBoard}
+4. Where possible use questions similar to those found in ${examType} exams for ${examBoard}.
 `;
 
-  // Add question type specific content guidance (without format instructions)
+  if (numCards > 1) {
+    basePrompt += `5. If generating multiple cards for this topic, each card's question must be unique and explore a different facet of the topic.\n`;
+  }
+
   if (questionType === "multiple_choice") {
     basePrompt += `
 CONTENT GUIDANCE:
@@ -86,7 +87,7 @@ CONTENT GUIDANCE:
   else if (questionType === "essay") {
     basePrompt += `
 CONTENT GUIDANCE:
-- Questions should match typical ${examType} essay question styles, employing a range of command words such as 'evaluate', 'discuss', 'to what extent', 'analyze', 'compare and contrast', 'explain', etc., ensuring they are appropriate for the question's focus and ${examBoard} standards.
+- Questions should reflect a realistic variety of ${examType} essay styles. It is crucial that for essay questions, you do not exclusively use one command word like 'evaluate'. Actively vary the command words (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain') to reflect a realistic range of exam question styles. Each question generated for this topic must be distinct.
 - KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion)
 - Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer
 - DetailedAnswer should provide a more elaborate explanation of the content, suitable for deeper understanding after reviewing key points
@@ -218,7 +219,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
   Where possible, base questions on previous ${examBoard} exam papers and ensure mark scheme alignment.
   Ensure the output strictly adheres to the requested JSON schema.
-  For 'essay' questions, ensure a variety of command words are used (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain', as well as 'evaluate'), appropriate to the ${examBoard} ${examType} style.
+  For essay questions, it is crucial that you do not exclusively use one command word like 'evaluate'. Actively vary the command words (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain', 'assess') to reflect a realistic range of exam question styles. When generating multiple cards for the same topic, each card's question must be unique and explore a different facet of the topic.
   For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
   For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
   For 'short_answer', 'keyPoints' should be an array of strings.
