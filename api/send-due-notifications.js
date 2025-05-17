@@ -2,14 +2,14 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-// Ensure PROGRESSIER_API is loaded from environment variables on your Heroku backend
-const PROGRESSIER_BEARER_TOKEN = process.env.PROGRESSIER_API;
+// Use the correct environment variable name as set in Heroku
+const PROGRESSIER_TOKEN = process.env.PROGRESSIER_API;
 const PROGRESSIER_API_ENDPOINT = 'https://progressier.app/q4j11iLHdvCqYbNjbcrR/send';
 
 router.post('/', async (req, res) => {
   console.log('Backend: Received request on /api/send-due-notification');
 
-  if (!PROGRESSIER_BEARER_TOKEN) {
+  if (!PROGRESSIER_TOKEN) {
     console.error('Backend: Progressier API token (PROGRESSIER_API) is not configured on the server.');
     return res.status(500).json({ status: 'error', error: 'Notification service is not configured on server.' });
   }
@@ -46,7 +46,7 @@ router.post('/', async (req, res) => {
       notificationPayload,
       {
         headers: {
-          'Authorization': \`Bearer \${PROGRESSIER_BEARER_TOKEN}\`,
+          'Authorization': 'Bearer ' + PROGRESSIER_TOKEN,
           'Content-Type': 'application/json'
         }
       }
