@@ -86,7 +86,7 @@ CONTENT GUIDANCE:
   else if (questionType === "essay") {
     basePrompt += `
 CONTENT GUIDANCE:
-- Questions should match typical ${examType} essay question styles
+- Questions should match typical ${examType} essay question styles, employing a range of command words such as 'evaluate', 'discuss', 'to what extent', 'analyze', 'compare and contrast', 'explain', etc., ensuring they are appropriate for the question's focus and ${examBoard} standards.
 - KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion)
 - Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer
 - DetailedAnswer should provide a more elaborate explanation of the content, suitable for deeper understanding after reviewing key points
@@ -218,6 +218,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
   Where possible, base questions on previous ${examBoard} exam papers and ensure mark scheme alignment.
   Ensure the output strictly adheres to the requested JSON schema.
+  For 'essay' questions, ensure a variety of command words are used (e.g., 'discuss', 'to what extent', 'compare', 'analyze', 'explain', as well as 'evaluate'), appropriate to the ${examBoard} ${examType} style.
   For 'acronym' type, provide the acronym itself in the 'acronym' field and the full expansion and explanation in the 'explanation' field.
   For 'multiple_choice', ensure 'options' is an array of 4 strings and 'correctAnswer' is one of those strings.
   For 'short_answer', 'keyPoints' should be an array of strings.
