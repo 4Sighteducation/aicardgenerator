@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { generateCards } = require("./aiCardGenerator");
+const { generateLargeCardSet } = require("./aiCardGenerator");
 const notificationsApiRoute = require('./api/send-due-notifications');
 
 const app = express();
@@ -12,11 +12,16 @@ app.get("/", (req, res) => res.send("AI Card Generator Backend is running."));
 
 app.post("/api/generate-cards", async (req, res) => {
   try {
-    const cards = await generateCards(req.body);
-    res.json({ cards });
+    const cardDataString = await generateLargeCardSet(req.body);
+    const parsedCards = JSON.parse(cardDataString);
+    res.json({ cards: parsedCards });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Failed to generate cards" });
+    console.error("Error in /api/generate-cards:", e);
+    if (e instanceof SyntaxError) {
+      res.status(500).json({ error: "Failed to parse card data from generation service." });
+    } else {
+      res.status(500).json({ error: "Failed to generate cards due to an internal server error." });
+    }
   }
 });
 
