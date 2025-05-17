@@ -253,9 +253,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   2. Explore a DIFFERENT facet of the topic
   3. Be structured uniquely based on the command verb used`;
 
-  const model = (questionType === "essay" || examType === "A-Level" || examType === "IB") 
-    ? "gpt-4-turbo" 
-    : "gpt-3.5-turbo";
+  const model = "gpt-3.5-turbo";
 
   let cardProperties = {
     subject: { type: "string", description: `The subject: ${subject}` },
