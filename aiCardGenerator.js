@@ -36,36 +36,38 @@ const cardExamples = {
   }
 };
 
-// New function from improved-flashcard-code (1).js
+// New getEssayInstructions function with rotating verb list
 function getEssayInstructions({ topic, examBoard, examType, subject, iterationHint = 0, totalCardsInSet = 1 }) {
-  const category3Verbs = ["Analyse", "Examine", "Explore", "Compare and contrast", "Differentiate between", "Distinguish between", "Review", "Investigate", "Solve"];
-  const category4Verbs = ["Discuss", "To what extent", "Evaluate", "Assess", "Argue", "Justify", "Criticise", "Suggest", "Propose", "Make a case for", "Predict", "Recommend"];
-  
+  const essayCommandVerbs = [
+    "Analyse", 
+    "Discuss", 
+    "To what extent", 
+    "Assess", 
+    "Compare and contrast",
+    "Explain the reasons for",
+    "Justify",
+    "Argue for or against"
+    // 'Evaluate' is initially omitted to force other verbs
+  ];
+
   if (totalCardsInSet === 1) {
-    return `For this essay question, select a command verb from Category 3 or 4 that best fits the nuance of the question you will formulate about "${topic}".`;
+    return `For this essay question, select an appropriate command verb from Categories 3 or 4 (e.g., Analyse, Discuss, Assess, To what extent, Evaluate) that best fits the nuance of the question you will formulate about "${topic}".`;
   }
+
+  const verbForThisCard = essayCommandVerbs[iterationHint % essayCommandVerbs.length]; 
+
+  let instruction = `This is card ${iterationHint + 1} of ${totalCardsInSet} for "${topic}".\n`;
+  instruction += `GUIDANCE FOR THIS CARD:\n`;
+  instruction += `1. For this specific card, you *must* formulate the primary essay question using the command verb: "${verbForThisCard}".\n`;
+  instruction += `2. Ensure the question explores a unique facet of "${topic}" that is different from other cards in this set.\n`;
+  instruction += `3. Structure your KeyPoints and DetailedAnswer appropriately for a question led by "${verbForThisCard}".`;
   
   if (iterationHint === 0) {
-    return `This is the first of ${totalCardsInSet} essay questions you'll generate for "${topic}".
-    GUIDANCE FOR THIS CARD:
-    1. Select a command verb from Category 3 or 4 that best suits the topic "${topic}" for ${examBoard} ${examType} ${subject}.
-    2. Remember that you'll need to use different command verbs for the remaining cards in this set.
-    3. Choose the verb that allows you to create the most fundamental or broadest question about this topic.`;
-  } 
-  else if (iterationHint === totalCardsInSet - 1) {
-    return `This is the final (${iterationHint + 1} of ${totalCardsInSet}) essay question for "${topic}".
-    GUIDANCE FOR THIS CARD:
-    1. For this card, select a command verb from Category 3 or 4 that you have NOT used in previous cards.
-    2. If you've already used "Discuss" and "Analyse" in previous cards, consider using "Evaluate", "Assess", "To what extent", or another distinct verb from Categories 3 or 4.
-    3. Ensure this question explores a different facet of "${topic}" compared to previous cards.`;
+    instruction += `\n   As this is the first card, aim for a question that addresses a fundamental aspect of the topic using "${verbForThisCard}".`;
+  } else if (iterationHint === totalCardsInSet - 1) {
+    instruction += `\n   As this is the final card, ensure your question using "${verbForThisCard}" provides a distinct concluding perspective or tackles a remaining important angle.`;
   }
-  else {
-    return `This is card ${iterationHint + 1} of ${totalCardsInSet} for "${topic}".
-    GUIDANCE FOR THIS CARD:
-    1. For this card, select a command verb from Category 3 or 4 that you have NOT used in previous cards.
-    2. Ensure this question explores a different facet of "${topic}" compared to previous cards.
-    3. Remember to save some distinct command verbs for remaining cards in the set.`;
-  }
+  return instruction;
 }
 
 function buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
@@ -113,7 +115,7 @@ CONTENT GUIDANCE:
 - KeyPoints should reflect main arguments and essay structure needed for top marks (e.g., intro, para 1, para 2, conclusion).
 - Include ${examType}-appropriate evaluation and analysis guidance in the detailed answer.
 - DetailedAnswer should provide a comprehensive explanation of how to structure the essay and cover key content points.
-`;
+`; 
   } 
   else if (questionType === "acronym") {
     basePrompt += `
@@ -134,33 +136,29 @@ function validateCards(cards, params) {
     let issues = [];
     if (!card.question || typeof card.question !== 'string' || card.question.trim() === '') {
         issues.push("Question is missing or empty.");
-        card.question = "Question generation failed."; // Default placeholder
-    } else if (card.question.length < 10 && !card.question.toLowerCase().includes(topic.toLowerCase())) { // Adjusted length
+        card.question = "Question generation failed."; 
+    } else if (card.question.length < 10 && !card.question.toLowerCase().includes(topic.toLowerCase())) { 
       issues.push("Question too brief or may lack specificity to the topic.");
     }
 
-    // Ensure subject, topic, questionType are present, defaulting if necessary (though API should provide)
     card.subject = card.subject || params.subject;
     card.topic = card.topic || params.topic;
     card.questionType = card.questionType || params.questionType;
 
-
     if (questionType === "multiple_choice") {
       if (!card.options || !Array.isArray(card.options) || card.options.length !== 4) {
         issues.push("Multiple choice requires exactly 4 options.");
-        card.options = ["Option A", "Option B", "Option C", "Option D"]; // Placeholder
+        card.options = ["Option A", "Option B", "Option C", "Option D"]; 
       }
       if (!card.correctAnswer || typeof card.correctAnswer !== 'string' || !card.options.includes(card.correctAnswer)) {
         issues.push("Correct answer must match exactly one of the options.");
-        card.correctAnswer = card.options[0]; // Default to first option if invalid
+        card.correctAnswer = card.options[0]; 
       }
       if (new Set(card.options).size !== card.options.length) {
         issues.push("Multiple choice options must be unique.");
-        // Basic de-duplication attempt (simple case)
         card.options = [...new Set(card.options)]; 
         while(card.options.length < 4) card.options.push(`Unique Option ${card.options.length + 1}`);
         if (!card.options.includes(card.correctAnswer)) card.correctAnswer = card.options[0];
-
       }
        if (!card.detailedAnswer || card.detailedAnswer.length < 20) {
          issues.push("Multiple choice detailed answer lacks sufficient explanation.");
@@ -196,7 +194,7 @@ function validateCards(cards, params) {
     }
 
     if (examType === "A-Level" || examType === "IB") {
-      if (card.detailedAnswer && card.detailedAnswer.length < (questionType === "essay" ? 150 : 100)) { // Increased minimum for essay
+      if (card.detailedAnswer && card.detailedAnswer.length < (questionType === "essay" ? 150 : 100)) { 
         issues.push(`${examType} explanation may lack sufficient depth/analysis.`);
       }
       const evaluationTerms = ["evaluate", "analyze", "compare", "contrast", "assess", "critique", "to what extent", "discuss"];
@@ -206,28 +204,22 @@ function validateCards(cards, params) {
         issues.push(`${examType} essay question or key points may lack evaluation/analytical focus.`);
       }
     } else if (examType === "GCSE") {
-      if (card.detailedAnswer && card.detailedAnswer.length > 400) { // Slightly increased max
+      if (card.detailedAnswer && card.detailedAnswer.length > 400) { 
         issues.push("GCSE explanation may be overly complex for the level.");
       }
     }
-    
-    // Map acronym explanation to detailedAnswer for frontend consistency
     if (card.questionType === "acronym" && card.explanation && !card.detailedAnswer) {
       card.detailedAnswer = card.explanation;
     }
-    
-    // Ensure all card types have a detailedAnswer field, even if basic
     if (!card.detailedAnswer) {
-        if (card.explanation) { // primarily for acronyms if not already mapped
+        if (card.explanation) { 
             card.detailedAnswer = card.explanation;
-        } else if (card.keyPoints && Array.isArray(card.keyPoints)) { // for short_answer/essay if detailedAnswer somehow missing
+        } else if (card.keyPoints && Array.isArray(card.keyPoints)) { 
             card.detailedAnswer = card.keyPoints.join("\n");
         } else {
-            card.detailedAnswer = "No detailed answer provided."; // ultimate fallback
+            card.detailedAnswer = "No detailed answer provided."; 
         }
     }
-
-
     return { ...card, _validationIssues: issues };
   });
 }
@@ -236,7 +228,6 @@ function validateCards(cards, params) {
 async function generateCards({ subject, topic, examType, examBoard, questionType, numCards, iterationHint = 0, totalCardsInSet = 1 }) {
   const prompt = buildPrompt({ subject, topic, examType, examBoard, questionType, numCards, iterationHint, totalCardsInSet });
 
-  // New simplified systemMessage from improved-flashcard-code (1).js
   const systemMessage = `You are an expert ${examType} ${subject} educator with extensive experience marking ${examBoard} exams.
   Create flashcards that precisely match actual ${examBoard} exam questions and mark schemes for ${examType} students studying "${topic}".
 
@@ -249,11 +240,11 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
   IMPORTANT: For essay questions, use a balanced variety of command verbs from Categories 3 & 4. Don't favor or avoid any particular command verb - choose what best fits the specific question being created.
 
   When generating multiple cards for the same topic, each card's question MUST:
-  1. Use a DIFFERENT primary command verb from the others in the set
+  1. Use a DIFFERENT primary command verb from the others in the set (this will be guided by the specific instruction for the current card iteration if it's an essay).
   2. Explore a DIFFERENT facet of the topic
   3. Be structured uniquely based on the command verb used`;
 
-  const model = "gpt-3.5-turbo";
+  const model = "gpt-3.5-turbo"; 
 
   let cardProperties = {
     subject: { type: "string", description: `The subject: ${subject}` },
@@ -319,14 +310,12 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       }
     };
   }
-  // Ensure all required properties are indeed required by the schema for the AI
   const baseRequired = ["subject", "topic", "questionType", "question"];
   let currentRequired = [...baseRequired];
   if (questionType === "multiple_choice") currentRequired.push("options", "correctAnswer", "detailedAnswer");
   else if (questionType === "short_answer") currentRequired.push("keyPoints", "detailedAnswer");
   else if (questionType === "essay") currentRequired.push("keyPoints", "detailedAnswer");
   else if (questionType === "acronym") currentRequired.push("acronym", "explanation");
-
 
   try {
     const response = await openai.chat.completions.create({
@@ -354,8 +343,8 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         }
       }],
       function_call: { name: "generateFlashcards" },
-      max_tokens: Math.min(4000, numCards * 350 + 200), // Adjusted token allocation
-      temperature: 0.5, // Slightly increased temperature for more variety
+      max_tokens: Math.min(4000, numCards * 350 + 200), 
+      temperature: 0.6, // Adjusted temperature
     });
     
     if (response.choices[0].message.function_call) {
@@ -365,19 +354,18 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       } catch (parseError) {
         console.error("Error parsing function call arguments from OpenAI:", parseError);
         console.error("Arguments received:", response.choices[0].message.function_call.arguments);
-        return JSON.stringify([]); // Return empty array string on parsing failure
+        return JSON.stringify([]); 
       }
 
       if (functionArgs.error) {
         console.error("OpenAI function call returned an error:", functionArgs.error);
-        return JSON.stringify([]); // Return empty array string
+        return JSON.stringify([]); 
       }
       if (functionArgs.cards && Array.isArray(functionArgs.cards)) {
         console.log(`Successfully received ${functionArgs.cards.length} cards from OpenAI function call for iteration ${iterationHint}.`);
         
         const validatedCards = validateCards(functionArgs.cards, { subject, topic, examType, examBoard, questionType });
         
-        // Log validation issues for internal review if any
         validatedCards.forEach((card, index) => {
           if (card._validationIssues && card._validationIssues.length > 0) {
             console.warn(`Validation issues for card ${index + 1} (iter ${iterationHint}, '${card.question && card.question.substring(0,30)}...'):`, card._validationIssues);
@@ -385,7 +373,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         });
         
         const cleanCards = validatedCards.map(card => {
-          const { _validationIssues, ...cleanCard } = card; // Remove validation issues from final output
+          const { _validationIssues, ...cleanCard } = card; 
           return cleanCard;
         });
 
@@ -393,11 +381,10 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
         return JSON.stringify(cleanCards);
       } else {
         console.error("OpenAI function call returned invalid or missing cards array. Args:", functionArgs);
-        return JSON.stringify([]); // Return empty array string
+        return JSON.stringify([]); 
       }
     } else {
       console.warn("Function call not used in OpenAI response. Fallback not implemented robustly. Response:", response.choices[0].message);
-      // Attempt to parse content directly if no function call - less reliable
       const content = response.choices[0].message.content;
       try {
         const parsedContent = JSON.parse(content);
@@ -409,7 +396,7 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
              return cleanCard;
            });
            return JSON.stringify(cleanCards);
-        } else if (Array.isArray(parsedContent)) { // If the content itself is an array of cards
+        } else if (Array.isArray(parsedContent)) { 
            console.log(`Successfully parsed ${parsedContent.length} cards directly as array from content for iteration ${iterationHint}.`);
            const validatedCards = validateCards(parsedContent, { subject, topic, examType, examBoard, questionType });
            const cleanCards = validatedCards.map(card => {
@@ -423,12 +410,11 @@ async function generateCards({ subject, topic, examType, examBoard, questionType
       } catch (e) {
         console.error("Error parsing fallback content from OpenAI:", e);
         console.error("Content received:", content);
-        return JSON.stringify([]); // Return empty array string on parsing failure
+        return JSON.stringify([]); 
       }
     }
   } catch (error) {
     console.error("OpenAI API call error:", error.status, error.message, error.response?.data);
-    // Do not throw error, return empty array string for frontend
     return JSON.stringify([]);
   }
 }
